@@ -8,26 +8,26 @@ A collection of ML experiments tracked with Weights & Biases.
 
 *Because `model_v2_final_fixed_REAL.pt` is not an experiment tracking strategy.*
 
-W&B's main power is realized when you **organize things properly**. At the end of the day, it's just another tool. Misuse leads to chaos; thoughtful use leads to reproducibility and sanity.
+W&B's main power is realized when you organize things properly. At the end of the day, it's just another tool. Misuse leads to chaos; thoughtful use leads to reproducibility and sanity.
 
 ### Philosophy: log everything, organize relentlessly
 
 It's very powerful to log as much as you can to W&B. In MLOps, **metadata is extremely cheap** (kilobytes of JSON), while **compute and human suffering are very expensive**.
 
-- **Metadata is "free"**: Your dataset might be 500MB. The metadata you're calculating (word counts, versions, config) is likely less than 5KB. It adds zero storage overhead and negligible computation time compared to the model training that follows.
-- **UI clutter is manageable**: It's better to have data hidden in the dashboard than not have it at all. You can always filter; you can never conjure data you didn't log.
+- Metadata is "free": Your dataset might be 500MB. The metadata you're calculating (word counts, versions, config) is likely less than 5KB. It adds zero storage overhead and negligible computation time compared to the model training that follows.
+- UI clutter is manageable: It's better to have data hidden in the dashboard than not have it at all. You can always filter; you can never conjure data you didn't log.
 
 ---
 
 ## Naming Conventions
 
-Consistent naming is critical for navigating the W&B dashboard and understanding your lineage graph. Random auto-generated names obscure your pipeline's story—see the [Lineage and Traceability](#lineage-and-traceability) section for a visual example of how good naming makes a pipeline readable at a glance.
+Consistent naming is critical for navigating the W&B dashboard and understanding your lineage graph. Random auto-generated names obscure your pipeline's story: see the [Lineage and Traceability](#lineage-and-traceability) section for a visual example of how good naming makes a pipeline readable at a glance.
 
 ### General Rule
 
-**Prefer dashes (`-`) over underscores (`_`) as delimiters**, except for metric names ([explained below](#metric-names)). Keep the name itself [under 128 characters](#artifact-names).
+Prefer dashes (`-`) over underscores (`_`) as delimiters, except for metric names ([explained below](#metric-names)). For any identifier, keep it [under 128 characters](#artifact-names).
 
-Why dashes? W&B has different naming constraints for different things (artifacts, metrics, tags, etc.). Rather than memorizing each, just use dashes everywhere—they work in all contexts except metrics (especially namespacing them).
+Why dashes? W&B has different naming constraints for different things (artifacts, metrics, tags, etc.). Rather than memorizing each, just use dashes everywhere. They work in ALL contexts.
 
 ### Run Names
 
@@ -36,25 +36,47 @@ Why dashes? W&B has different naming constraints for different things (artifacts
 | Experiments/Evaluations | `exp-{00X}-{job_type}-{timestamp}` | `exp-003-train-2025-12-13T07-30-22Z ` |
 | Data Ops | `{job_type}-{more-info}-{dataset}` | `encode-head-tail-phishing-texts` |
 
-Even though W&B stores start time, duration, and end time automatically, and you can sort/filter by these columns effortlessly; putting the timestamp in the run name allows you to run scripts multiple times (when bug fixing) without having the same name in the UI.
-    * You can either use `datetime` or `int(time.time())`, it doesn't really matter as long as they are unique.
+Even though W&B stores start time, duration, and end time automatically (and you can sort/filter by these columns via one click), putting the timestamp in the run name allows you to run the same script multiple times without having the same name show up in the UI.
+* You can either use `datetime.now(timezone.utc)` or `int(time.time())`, or even a random hash. It doesn't really matter as long as the resulting identifier is unique.
+
+TL;DR: The goal is just to make runs easier to distinguish visually in the UI and avoid confusion when looking at the runs table.
 
 ### Groups
 
 Group related runs together to see them as a unit in the dashboard:
 
-- Experiments: Group train and evaluation (test) runs together → `exp-003`
-- Data Pipelines: Group pipeline stages → `phishing-pipeline-v2`
+- Experiments: group `train` and evaluation (`test`) runs → `exp-003`
+- Data pipelines: group pipeline stages → `phishing-pipeline-v2`
+- Distributed training: if you have multiple workers/processes, they can all share the same `group` to be visualized together
+
+TL;DR: groups are for saying "these runs are all part of experiment X" so you can filter, aggregate, and reason about them together.
 
 ### Job Types
 
-Keep `job_type` values simple and consistent across your organization:
+Keep `job_type` values **simple and consistent across your organization**:
 
 | Category | Job Types |
 |----------|-----------|
 | **Training** | `pre-train`, `train`, `fine-tune` |
 | **Evaluation** | `eval`, `test`, `inference` |
 | **Data Ops** | `ingest`, `clean`, `encode`, `transform`, `split` |
+
+Why does consistency matter? Picture this: four teammates, four runs, four *completely* different names for the exact same thing:
+
+```python
+# ❌ Bad - team uses different terms for the same thing
+job_type="preprocessing"
+job_type="data_prep"
+job_type="clean-data"
+job_type="etl"
+
+# ✅ Good - consistent vocabulary
+job_type="clean"
+```
+
+Now try filtering by `job_type`. Go ahead, I'll wait.
+
+TL;DR: Pick a fixed vocabulary, document it, and stick to it. Your future self and teammates will thank you when filtering runs and tracing artifact lineage.
 
 ### Tags
 
@@ -79,7 +101,7 @@ Tags are freeform, mutable, and highly flexible. Use them to capture the **what/
 
 ### Metric Names
 
-[Due to GraphQL limitations, metric names should technically match `/^[_a-zA-Z][_a-zA-Z0-9]*$/`.](https://docs.wandb.ai/models/track/log#metric-naming-constraints) However, W&B has engineered workarounds allowing slashes, hyphens, and spaces.
+[Due to GraphQL limitations](https://docs.wandb.ai/models/track/log#metric-naming-constraints), metric names should technically match `/^[_a-zA-Z][_a-zA-Z0-9]*$/`. However, W&B has engineered workarounds allowing slashes, hyphens, and spaces.
 
 **Recommended convention**: Use slash-separated namespaces for clarity:
 
@@ -109,7 +131,7 @@ The last value logged during a run becomes the entry in `run.summary`.
 params = {
     # PARAMS: Hyperparameters and settings that affect behavior.
     # Things you set *before* the code runs.
-    # "If I wanted to change this behavior tomorrow without rewriting code, I would make this a variable."
+    # Think: "If I wanted to change this behavior tomorrow without rewriting code, I would make this a variable."
     # Rule: If you have the code and the config, you should be able to reproduce the run exactly.
     # Team signal: "If it's inside params, don't touch it unless you want behavior to change."
     "hf_dataset_path": "David-Egea/phishing-texts",
@@ -131,7 +153,7 @@ meta = {
     "output_structure": "datasets.DatasetDict",
     "output_format": "hf_arrow_dir",
     # A new guy coming into the team can immediately tell
-    # How to load the dataset
+    # how to load the dataset.
     "recommended_loader": "datasets.load_from_disk",
     "license": "MIT",
 }
@@ -152,8 +174,9 @@ with wandb.init(config=config, ...) as run:
 | **W&B Dashboard** | Handles nested configs beautifully (e.g., filter by `params.batch_size`) |
 
 ***NOTE**: This convention was adopted due to `wandb`-`transformers` integration. When using HF `Trainer` with `WandbCallback`, you're no longer the only one writing the config.
-* It can overwrite your value (or ignore yours), depending on the timing, but usually HF asserts dominance once training starts.
-* It can heavily pollute your namespace. Your carefully curated flat config will be buried under 40+ infrastructure parameters from HF.
+* It can happily overwrite your value as usually HF asserts dominance once training starts.
+* It can heavily pollute your namespace.
+    * Your carefully curated flat config will be buried under 40+ infrastructure parameters from HF.
 
 ### Pros (with HF)
 
@@ -164,7 +187,7 @@ with wandb.init(config=config, ...) as run:
 
 #### Cons
 
-* UI clutter - this adds 7 characters of noise in every single hyperparameter column in your Runs table and Parallel Coordinates charts, making them harder to scan quickly.
+* This adds 7 characters of noise in every single hyperparameter column in your Runs table and Parallel Coordinates charts, making them harder to scan quickly.
 * Your sweep configuration YAML must match this nesting exactly.
 * Filter and grouping friction - you strictly have to type `params.lr` for example in ("Show me runs where learning rate > 0.01").
 
@@ -248,15 +271,15 @@ input_artifact = run.use_artifact("phishing-texts-encoded:v3")
 
 Artifact metadata is a **powerful but often overlooked feature** in W&B. It's the difference between "here's a blob" and "here's a self-documenting, queryable asset."
 * Tutorials often skip it, the "just make it work" examples don't model good metadata hygiene.
-* It's optional but don't skip it! Again, logging is free.
 * You don't feel the absence of metadata until 3 months later when you're staring at `model:v17` and wondering what the heck dataset it was trained on.
 
-**Tip**: Dump `run.config` into artifact metadata: `metadata={**run.config, ...}`.
+**Tip**: Dump `run.config` and/or `run.summary` into artifact metadata: `metadata={**run.config, ...}`.
 
-This seems redundant! The config is already saved with the run, but it makes the artifact **self-contained**:
+This seems redundant! The config and summary are already saved with the run, but it makes the artifact **self-contained**:
 - 6 months later, you're browsing artifacts, not runs. The config is right there.
 - If someone uses your artifact from another project, they see the config without navigating to your run.
 - Downloaded artifacts carry their own documentation.
+- In fact, [this is what the HF `WandbCallback` does anyway](https://github.com/huggingface/transformers/blob/v5.0.0rc1/src/transformers/integrations/integration_utils.py#L849).
 
 The cost is a few KB of duplicated JSON. The benefit is never having to ask "wait, what config produced this?"
 
@@ -280,7 +303,7 @@ Metadata answers questions like:
 
 #### Model Artifact Example
 
-For classification models, **label mappings are critical**—without them, your model outputs meaningless integers:
+For classification models, label mappings are critical—without them, your model outputs meaningless integers:
 
 ```python
 model_artifact = wandb.Artifact(
@@ -347,7 +370,7 @@ metadata = {"accuracy": np.float64(0.95)}
 metadata = {"accuracy": float(np.float64(0.95))}
 
 # For arrays/lists of numpy values
-metadata = {"scores": [float(x) for x in numpy_array]}
+metadata = {"scores": [float(x) for x in ndarray]}
 ```
 
 #### Updating Metadata
@@ -365,7 +388,7 @@ artifact.metadata.update(computed_stats)
 
 ### Tables
 
-W&B Tables turn debugging from a guessing game into a database query. Unlike TensorBoard's static images, Tables let you log actual data that you can sort, filter, and explore.
+W&B Tables turn debugging from a guessing game into a database query. Unlike TensorBoard's static images, Tables let you log actual data that you can **interactively** sort, filter, and explore.
 
 ```python
 # Log predictions table for error analysis
@@ -383,8 +406,8 @@ run.log({"predictions": predictions_table})
 **Table capabilities:**
 - Support primitive and numeric types, nested lists, dictionaries
 - Support rich media types: images, audio, video, HTML, molecules
-- Interactive sorting, filtering, and grouping in the UI
-- Default limit of 10,000 rows for optimal UI performance
+- **Interactive sorting, filtering, and grouping in the UI**
+- **Note:** Default limit of 10,000 rows for optimal UI performance
 
 **Use cases:**
 - Log validation failures sorted by confidence to see where the model is most confused
@@ -393,13 +416,48 @@ run.log({"predictions": predictions_table})
 
 Tables are a specialized [data type](https://docs.wandb.ai/models/ref/python/data-types) logged as an [artifact](https://docs.wandb.ai/models/artifacts) object.
 
+#### Example: Error Analysis with Tables
+
+Say you log an evaluation table during validation with the ff. columns for each prediction:
+
+![evaluation-table](assets/wandb-eval-table.png)
+
+This table has 12,180 rows—one per validation sample. Each row shows:
+- **Decoded Text**: The input text (truncated in the UI for readability)
+- **True Label** / **Predicted Label**: Ground truth vs. model output
+- **Prob (Ham)** / **Prob (Phishing)**: Model confidence scores
+- **Is Error**: Boolean flag for misclassifications
+
+From here, you can immediately:
+- Sort by confidence to find high-confidence errors (the dangerous ones)
+- Filter to `Is Error = True` to see only misclassifications
+- Search the text to find patterns in failures (e.g., do short texts fail more?)
+
+But the real power is **grouping**. Click "Group by" → `Is Error`:
+
+![group-by-is-error](assets/wandb-group-by-is-error.png)
+
+Now W&B aggregates the data into two rows: correct predictions (`False`) and errors (`True`). For each group, you get automatic histograms of every column. Here's what the histograms reveal:
+
+**Row 1 — 11956 correct predictions:**
+- Prob (Ham) clustered at 1.0, Prob (Phishing) clustered at 0.0 → model is confident when it's right ✓
+
+**Row 2 — 224 misclassifications:**
+- Predicted Label is almost entirely "ham" → when the model is wrong, it predicts "ham"
+- True Label shows a mix, but "phishing" is well-represented → phishing messages are slipping through as ham
+- Prob (Ham) has a cluster near 1.0 → some errors are high-confidence, meaning the model is *confidently* letting phishing through
+
+This model has a **false negative problem**; it's missing phishing and calling it ham. For a security application, that's a dangerous direction. You'd rather flag legitimate emails for review than let phishing slip through undetected.
+
+This is what "debugging as a database query" means. You're not guessing which samples failed. You're actually slicing and aggregating thousands of predictions in seconds. All in the UI, no `matplolib` + `seaborn` shenanigans.
+
 ### System Metrics
 
-W&B **automatically logs system stats**: GPU utilization, CPU usage, memory, disk I/O, network, and temperature.
+W&B automatically logs system stats: GPU utilization, CPU usage, memory, disk I/O, network, and temperature.
 
 > If a run crashes overnight, `wandb` tells me exactly where the GPU memory spiked or if the CPU bottlenecked the data loader. I don't have to `ssh` in and stare at `htop`.
 
-No configuration required. This works out-of-the-box by default.
+This works out-of-the-box by default, no config required.
 
 ### Run Summary
 
@@ -451,8 +509,8 @@ The ability to trace any model back to its source data is one of W&B's most powe
 
 **What this graph shows:**
 
-1. **One cleaned dataset** → branched into **two encoding strategies** (standard truncation vs. head-tail truncation)
-2. Each encoded dataset → used to **fine-tune (2) separate models**
+1. One cleaned dataset → branched into two encoding strategies (standard truncation vs. head-tail truncation)
+2. Each encoded dataset → used to fine-tune (2) separate models
 3. Every arrow represents an explicit `run.use_artifact()` → `run.log_artifact()` relationship
 
 **Why this matters:** When `model-head-tail:v2` outperforms `model-standard:v1`, I can trace back and see *exactly* which dataset version, encoding parameters, and preprocessing steps produced each. No guessing, no "which notebook did I run?"
@@ -461,19 +519,19 @@ The ability to trace any model back to its source data is one of W&B's most powe
 
 The fundamental approach is creating a **directed graph of dependencies**, where the output artifact of one step becomes the explicitly declared input artifact for the next.
 
-Each pipeline step is an **independent W&B run** that:
+Each pipeline step is an independent W&B run that:
 1. Declares its input artifacts with `run.use_artifact()`
 2. Logs its output as a new artifact with `run.log_artifact()`
 
 ```python
-# Step 1: Data Ingestion
+# Step 1: Data ingestion
 with wandb.init(job_type="ingest", ...) as run:
     raw_data = download_data()
     artifact = wandb.Artifact("raw-data", type="dataset")
     artifact.add_dir("./data/raw")
     run.log_artifact(artifact)
 
-# Step 2: Data Cleaning (declares dependency on Step 1)
+# Step 2: Data cleaning (declares dependency on Step 1)
 with wandb.init(job_type="clean", ...) as run:
     input_artifact = run.use_artifact("raw-data:latest")
     input_path = input_artifact.download()
@@ -484,7 +542,7 @@ with wandb.init(job_type="clean", ...) as run:
     output_artifact.add_dir("./data/cleaned")
     run.log_artifact(output_artifact)
 
-# Step 3: Encoding (declares dependency on Step 2)
+# Step 3: Tokenization + encoding (declares dependency on Step 2)
 with wandb.init(job_type="encode", ...) as run:
     input_artifact = run.use_artifact("cleaned-data:latest")
     # ... and so on
@@ -507,12 +565,13 @@ with wandb.init(job_type="encode", ...) as run:
 
 W&B has [deep integration](https://docs.wandb.ai/models/integrations/huggingface) with HuggingFace Transformers, automatically logging:
 
-- Configuration parameters
-- Training losses and metrics
-- Gradients and parameter distributions
-- Model checkpoints
-- Code versioning
-- System metrics (GPU, CPU, memory, temperature)
+- **Configuration parameters**: All `TrainingArguments` hyperparameters, model configuration, and tokenizer settings
+- **Training metrics**: Loss curves, learning rates, gradient norms, and training progress (logged as `train/loss`, `train/learning_rate`, `train/grad_norm`, etc.)
+- **Evaluation metrics**: Validation/test losses and metrics when `eval_dataset` is provided (logged as `eval/loss`, `eval/f1`, `eval/precision`, `eval/recall`, `eval/accuracy`, etc.)
+- **System performance**: GPU/CPU utilization, memory usage, temperature, and throughput metrics (`eval/runtime`, `eval/samples_per_second`, `eval/steps_per_second`)
+- **Model checkpoints**: Best model or all checkpoints saved as W&B Artifacts (configurable via `WANDB_LOG_MODEL` environment variable)
+- **Gradients and parameters**: Parameter distributions and gradient histograms (enabled via `WANDB_WATCH` environment variable, disabled by default)
+- **Training progress**: Epoch progression, global step counts, and real-time training curves
 
 #### Setup
 
@@ -524,7 +583,7 @@ W&B has [deep integration](https://docs.wandb.ai/models/integrations/huggingface
    Or set it in code via `os.environ`.
    If this is not set, HuggingFace will save the best model to your disk, but will not log as an artifact to W&B.
 
-2. **TrainingArguments** configuration:
+2. `transformers.TrainingArguments` configuration:
    ```python
    from transformers import TrainingArguments, Trainer
 
@@ -535,6 +594,7 @@ W&B has [deep integration](https://docs.wandb.ai/models/integrations/huggingface
        # ... other args
    )
    ```
+After these setup steps, W&B via the `WandbCallback` automatically logs all training progress, metrics, and artifacts without any additional code in your training loop.
 
 #### Manual Initialization for Custom Naming
 
@@ -574,7 +634,7 @@ with wandb.init(
 
 **Important notes:**
 - When `Trainer` starts, it detects the active run and logs to it (merging its own config)
-- `Trainer` may overwrite some configs you declared—another reason to use the `params`/`meta` pattern to keep your values namespaced
+- `Trainer` may overwrite some configs you declared—a reason to use the `params`/`meta` pattern to keep your values namespaced
 - Manual initialization (`wandb.init()`) takes precedence over environment variables like `WANDB_PROJECT`
 
 ---
@@ -668,8 +728,6 @@ with wandb.init(
     # PRO TIP: W&B can save the code from the file that called wandb.init()
     save_code=True,
 ) as run:
-    print(f"🚀 Starting run: {run.name}")
-    print(f"⚙️ Config: {run.config}")
 
     # Just a reminder for Sweep safety: access values from 'run.config', not 'raw_config'
     # This ensures if W&B sweeps override 'learning_rate', you use the new value.
@@ -708,18 +766,26 @@ with wandb.init(
 - [ ] Add relevant `tags`
 - [ ] Structure config with `params` and `meta`
 
+**HF-specific setup:**
+- [ ] Set `WANDB_LOG_MODEL` environment variable for model checkpoint logging
+- [ ] Configure `TrainingArguments` with `report_to=["wandb"]` to enable WandbCallback
+- [ ] *(Optional)* Set `WANDB_WATCH` for gradient/parameter logging
+- [ ] Call `wandb.init()` *before* `Trainer` instantiation for custom naming control
+- [ ] Use `params`/`meta` structure to prevent `Trainer` from overwriting your custom config values
+
 **Artifacts & lineage:**
 - [ ] Use `run.use_artifact()` to declare input dependencies
 - [ ] Use `run.log_artifact()` to save outputs
 
 **Logging:**
-- [ ] Log scalar metrics with namespaced keys (`train/loss`, `eval/f1`)
+- [ ] **HuggingFace users**: Verify `WandbCallback` is logging expected metrics (may not need manual logging)
+- [ ] Log scalar metrics with namespaced keys (`train/loss`, `eval/f1`) when not using automatic integrations
 - [ ] *(Optional)* Log [Tables](https://docs.wandb.ai/guides/tables) for structured data (predictions, error analysis, dataset samples)
 - [ ] *(Optional)* Log [rich media](https://docs.wandb.ai/guides/track/log/media) for deeper insight:
   - Images: `wandb.Image()` — model predictions, attention maps, augmentations
   - Audio: `wandb.Audio()` — generated speech, audio classification samples
   - Video: `wandb.Video()` — agent rollouts, temporal predictions
-  - Plots: `wandb.plot.*` — ROC curves, confusion matrices, histograms
+  - Plots: `wandb.plot.*` — ROC curves, confusion matrices, histograms, PR curves, etc.
   - ...and so on
 
 ---

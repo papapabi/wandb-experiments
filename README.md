@@ -12,7 +12,7 @@ W&B's main power is realized when you organize things properly. At the end of th
 
 ### Philosophy: log everything, organize relentlessly
 
-It's very powerful to log as much as you can to W&B. In MLOps, **metadata is extremely cheap** (kilobytes of JSON), while **compute and human suffering are very expensive**.
+It's extremely beneficial to log as much as you can to W&B. In MLOps, metadata is extremely cheap (kilobytes of JSON), while **compute and human suffering are very expensive**.
 
 - Metadata is "free": Your dataset might be 500MB. The metadata you're calculating (word counts, versions, config) is likely less than 5KB. It adds zero storage overhead and negligible computation time compared to the model training that follows.
 - UI clutter is manageable: It's better to have data hidden in the dashboard than not have it at all. You can always filter; you can never conjure data you didn't log.
@@ -25,9 +25,17 @@ Consistent naming is critical for navigating the W&B dashboard and understanding
 
 ### General Rule
 
-Prefer dashes (`-`) over underscores (`_`) as delimiters, except for metric names ([explained below](#metric-names)). For any identifier, keep it [under 128 characters](#artifact-names).
+Use `kebab-case-format` (start with a letter) and use dashes (`-`), not underscores (`_`) as delimiters. This applies to most identifiers, though metric names are an exception ([see below](#metric-names)). Ensure all identifiers stay [under 128 characters](#artifact-names).
 
-Why dashes? W&B has different naming constraints for different things (artifacts, metrics, tags, etc.). Rather than memorizing each, just use dashes everywhere. They work in ALL contexts.
+Why dashes? W&B has different naming constraints for different things (artifacts, metrics, tags, etc.). Rather than memorizing each, just use `kebab-case-123` everywhere. It works in ALL contexts.
+
+### Project Names
+
+**Don't** create a new project for each experiment. Think of a W&B Project like a code repository: it should hold all experiments for a specific objective or model category as the top-level organizer.
+
+* Format: `[domain]-[task]-[optional-arch]`
+* Examples: `nlp-sentiment-analysis`, `cv-obstacle-detection`
+* Avoid: `bert-experiment-1`, `monday-training-run`
 
 ### Run Names
 
@@ -38,6 +46,9 @@ Why dashes? W&B has different naming constraints for different things (artifacts
 
 Even though W&B stores start time, duration, and end time automatically (and you can sort/filter by these columns via one click), putting the timestamp in the run name allows you to run the same script multiple times without having the same name show up in the UI.
 * You can either use `datetime.now(timezone.utc)` or `int(time.time())`, or even a random hash. It doesn't really matter as long as the resulting identifier is unique.
+
+Antipattern: Don't cram hyperparameters into the run name. Use `run.config` for that. The run name should be a concise, human-readable identifier.
+* :x: Bad example: `train-lr0.001-bs32-epochs100-dropout0.5-adam-warmup1000`
 
 TL;DR: The goal is just to make runs easier to distinguish visually in the UI and avoid confusion when looking at the runs table.
 
@@ -94,6 +105,10 @@ Tags are freeform, mutable, and highly flexible. Use them to capture the **what/
 
 ### Artifact Names
 
+Skip version numbers in names, as W&B handles versioning automatically (`:v0`, `:v1`, `:v2`, ...). Name artifacts by their content or purpose.
+- Dataset: `customer-transactions-raw`, `phishing-texts-encoded-head-tail`, `cifar10-augmented`
+- Model: `distilbert-phishing-texts-standard-trunc`, `bert-base-uncased-sentiment`, `resnet50-imagenet-pretrained`, `lstm-text-classifier`
+- Results: `eval-predictions-csv`
 - Use **relative artifact names** when referencing artifacts within the same project
 - Use **fully qualified names** (`entity/project/artifact:version`) only when referencing artifacts from a different project
 - Follow the same dash-delimited convention: `phishing-texts-encoded` regardless of artifact type for consistency
@@ -264,7 +279,7 @@ run.log_artifact(model_artifact)
 # Declare input dependency for lineage
 input_artifact = run.use_artifact("phishing-texts-encoded:v3")
 ```
-
+W&B automatically versions artifacts (:v0, :v1, :v2, ...)
 **Note:** W&B does not automatically create a new artifact version if you only update the metadata and the underlying files have not changed.
 
 ### Artifact Metadata
@@ -418,7 +433,7 @@ Tables are a specialized [data type](https://docs.wandb.ai/models/ref/python/dat
 
 #### Example: Error Analysis with Tables
 
-Say you log an evaluation table during validation with the ff. columns for each prediction:
+Say you log an evaluation table during validation with the following columns for each prediction:
 
 ![evaluation-table](assets/wandb-eval-table.png)
 
@@ -449,7 +464,7 @@ Now W&B aggregates the data into two rows: correct predictions (`False`) and err
 
 This model has a **false negative problem**; it's missing phishing and calling it ham. For a security application, that's a dangerous direction. You'd rather flag legitimate emails for review than let phishing slip through undetected.
 
-This is what "debugging as a database query" means. You're not guessing which samples failed. You're actually slicing and aggregating thousands of predictions in seconds. All in the UI, no `matplolib` + `seaborn` shenanigans.
+This is what "debugging as a database query" means. You're not guessing which samples failed. You're actually slicing and aggregating thousands of predictions in seconds. All in the UI, no `matplotlib` + `seaborn` shenanigans.
 
 ### System Metrics
 
